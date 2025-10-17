@@ -30,15 +30,47 @@ sudo ./sht31_radxa /dev/i2c-7 0x44 0x45
  *  @date 2025-10-17
  */
 
- #include <iostream>
- #include <iomanip>
- #include <string>
- #include <cstring>
- #include <cerrno>
- #include <cstdint>
- #include <chrono>
- #include <thread>
- #include <fcntl.h>
- #include <sys/ioctl.h>
- #include <linux/i2c-dev.h>
- 
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <cstring>
+#include <cerrno>
+#include <cstdint>
+#include <chrono>
+#include <thread>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/i2c-dev.h>
+
+class DFRobot_SHT3x{
+public:
+    DFRobot_SHT3x(void* /*pWire*/=nullptr, u_int8_t address=0x44, int busnum=1): _addr(address), _busnum(busnum), _fd(-1), _lastTC(0), _lastRH(0), _haveReading(false) {}
+
+    ~DFRobot_SHT3x(){
+        if (_fd >=0) ::close(_fd);
+    }
+
+    int begin(){
+        //TODO: Open `/dev/i2c-<busnum>
+        _devpath = "/dev/i2c-" + std::to_string(_busnum);
+        _fd = ::open(_devpath.c_str(), 0_RDWR);
+        if (_fd<0){
+            _lastErr = "open " + _devpath + " failed: " + std::string(std::strerror(errno));
+            return 1;
+        }
+        if (!setSlave(_addr)) return 2;
+
+        //Soft reset (datasheet > 1ms)
+        if(!softreset()) return 3;
+
+        //Quick Probe: Try a single shot read one
+        float tc = 0, rh=0;
+        if(!measureOnce(tc, rh)) return 4;
+
+        _lastTC = tc;
+        _lastRH = rh;
+        _haveReading = true;
+        return 0;
+    }
+
+}
