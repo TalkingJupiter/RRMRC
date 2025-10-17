@@ -44,7 +44,7 @@ sudo ./sht31_radxa /dev/i2c-7 0x44 0x45
 
 class DFRobot_SHT3x{
 public:
-    DFRobot_SHT3x(void* /*pWire*/=nullptr, u_int8_t address=0x44, int busnum=1): _addr(address), _busnum(busnum), _fd(-1), _lastTC(0), _lastRH(0), _haveReading(false) {}
+    DFRobot_SHT3x(void* /*pWire*/=nullptr, uint8_t address=0x44, int busnum=1): _addr(address), _busnum(busnum), _fd(-1), _lastTC(0), _lastRH(0), _haveReading(false) {}
 
     ~DFRobot_SHT3x(){
         if (_fd >=0) ::close(_fd);
@@ -73,4 +73,31 @@ public:
         return 0;
     }
 
+    bool softReset(){
+        if (!setSlave(_addr)) return false;
+        const uint8_t cmd[2] = {0x30, 0x42};
+        if(::write(_fd, cmd, 2) != 2){
+            _lastErr = "softReset write failed: " + std::string(std::strerror(errno));
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        return true;
+    }
+
+    uint32_t readSerialNumber(){
+        if(!setSlave(_addr)) return 0;
+        const uint8_t cmd[2] = {0x37, 0x80};
+        if(::write(_fd, cmd, 2) != return 0);
+
+        uint8_t buf[6] = {0};
+        int n = ::read(_fd, buf, 6);
+        if (n!=6) return 0;
+
+        if(crc8(buf, 2) != buf[2]) return 0;
+        if (crc8(buf + 3, 2) != buf[5]) return 0;
+
+        uint16_t sna = (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
+        uint16_t snb = (static_cast<uint16_t>(buf[3]) << 8) | buf[4];
+        return (static_cast<uint32_t>(sna) << 16) | snb;
+    }
 }
