@@ -100,4 +100,21 @@ public:
         uint16_t snb = (static_cast<uint16_t>(buf[3]) << 8) | buf[4];
         return (static_cast<uint32_t>(sna) << 16) | snb;
     }
+
+    float getTemperatureC(){
+        ensureFresh();
+        return _lastTC;
+    }
+
+    float getTemperatureF(){
+        ensureFresh();
+        return static_cast<float>(_lastTC * 9.0 / 5.0 + 32.0);
+    }
+
+    float getHumidityRH(){
+        ensureFresh();
+        return _lastRH;
+    }
+
+    std::string lastError() const {return _lastErr;} //exposing the last error string for debug purposes
 }
