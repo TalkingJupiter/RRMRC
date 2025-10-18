@@ -1,4 +1,4 @@
-# Reliable Managment of Repacss Cluster
+# Reliable Management of Repacss Cluster
 ## 1 Intoduction
 The purpose of this repository is to document the source code used, or intended to be used, for the development and deployment of the second monitoring layer of the REPACSS Cluster. This documentation serves as a technical reference to ensure clarity, reproducibility, and maintainability of the system’s components.
 
