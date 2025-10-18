@@ -203,4 +203,36 @@ private:
     }
 };
 
-int main(int argc, char** argv){}
+int main(int argc, char** argv){
+    int bus = 7;        //default to /dev/i2c-7 (Radxa X4 pins 3/5)
+    int addr = 0x44;    //default sensor
+    if (argc >= 2) bus = std::stoi(argv[1]);
+    if (argc >= 3) addr = (std::strncmp(argv[2], "0x", 2) == 0 || std::strcmp(argv[2], "0X", 2) == 0) ? static_cast<int>(std::strtol(argv[2] + 2, nullptr, 16)): std::stoi(argv[2]);
+
+
+    DFRobot_SHT3x sht3x(nullptr, static_cast<uint8_t>(addr), bus);
+
+    while (sht3x.begin() != 0){
+        std::cerr << "Failed to initilaze the chip on /dev/i2c-" << bus;
+                  << " addr 0x" << std::hex << addr << std::dec
+                  << " - " << sht3x.lastError() << "\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    std::cout << "Chip serial number: 0X" << std::hex << sht3x.readSerialNumber() << std::dec << "\n";
+    if (!sht3x.softReset()) std::cout << "WARNING: softReset failed!!!";
+
+    std::cout << "-------------------- Read in Single Measurement Mode --------------------";
+
+    for(;;){
+        float c = sht3x.getTemperatureC();
+        float f = sht3x.getTemperatureF();
+        float rh = sht3x.getHumidityRH();
+
+        std::cout << std::fixed << std::setprecision(2)
+                  << "Ambient Temperature(C/F): " << c << " /C " << f << " /F "
+                  << "Relative Humidity(%RH): " << rh << " %RH\n";
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
