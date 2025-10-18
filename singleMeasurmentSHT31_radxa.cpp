@@ -117,4 +117,90 @@ public:
     }
 
     std::string lastError() const {return _lastErr;} //exposing the last error string for debug purposes
-}
+
+private:
+    uint8_t _addr;
+    int     _busnum;
+    int     _fd;
+    std::string _devpath;
+    std::string _lastErr;
+
+    float _lastTC, lastRH;
+    bool _haveReading;
+    std::chrono::steady_clock::time_point _lastReadTime;
+
+    static uint8_t crc8(const uint8_t* data, size_t len){
+        uint8_t crc=0xFF;
+        for(size_t i=0; i<len; i++){
+            crc ^=data[i];
+            for (int b=0; b<8; b++){
+                crc = (crc&0x80) ? static_cast<uint8_t>((crc<<1)) ^ 0x31 : static_cast<uint8_t>(crc <<1);
+            }
+        }
+        return crc;
+    }
+
+    bool setSlave(int addr7){
+        if (_fd < 0) return false;
+        if (ioctl(_fd, I2C_SLAVE, addr7) < 0){
+            _lastErr = "ioctl(I2C_SLAVE,0x" + toHex(addr7) + ") failed: " + std::string(std::strerror(errno));
+            return false;
+        }
+        return true;
+    }
+    
+    static std::string toHex(int v){
+        std::ostringstream oss; oss << std::hex <<v; return oss.str();
+    }
+    
+    bool measureOnce(float& tC, float& rh) {
+        if(!setSlave(_addr)) return false;
+
+        const uint8_t cmd[2] = {0x24, 0x00};
+        if(::write(_fd, cmd, 2) != 2){
+            _lastErr = "measure write failed: " + std::string(std::strerror(errno));
+            return false;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+
+        uint8_t buf[6] = {0};
+        int n = ::read(_fd, buf, 6);
+        if(n!=6){
+            _lastErr = "measure read failed: " + std::string(std::strerror(errno));
+            return false;
+        }
+
+        if (crc8(buf, 2) != buf[2]) {_lastErr = "temp CRC mismatch"; return false}
+        if (crc8(buf +3, 2) != buf[5]) {_lastErr = "RH CRC mismatch"; return false}
+
+        uint16_t rawT = (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
+        uint16_t rawRH = (static_cast<uint16_t>(buf[3]) << 8) | buf[4];
+
+        double t_c = -45 + 175.0 * (static_cast<uint16_t>(rawT) / 65535.0);
+        double rhp = 100.0*(static_cast<double>(rawRH) / 65535.0);
+
+        if (rhp < 0.0) rhp=0.0; if (rhp > 100.0) rhp = 100.0;
+
+        tC = static_cast<float>(t_c);
+        rh = static_cast<float(rhp);
+        return true;
+    }
+    
+    void ensureFresh(){
+        auto now = std::chrono::steady_clock::now();
+        bool need = !_haveReading || (std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastReadTime).count() > 500);
+
+        if (!need) return;
+
+        float tc=0, rh=0;
+
+        if(measureOnce(tc, rh)){
+            _lastTC = tc; _lastRH = rh; _haveReading=true; _lastReadTime = now;
+        } else {
+            if(!_haveReading) {_lastTC=_lastRH = std::numeric_limits<float>::quiet_NaN();}
+        }
+    }
+};
+
+int main(int argc, char** argv){}
